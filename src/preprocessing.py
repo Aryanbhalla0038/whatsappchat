@@ -5,8 +5,6 @@ Handles chat export parsing and data cleaning
 
 import re
 import pandas as pd
-from datetime import datetime
-from typing import List, Tuple, Optional
 
 
 class ChatPreprocessor:

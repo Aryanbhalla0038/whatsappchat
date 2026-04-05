@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import re
 from datetime import datetime
+from typing import Optional
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from collections import Counter

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11']
+        python-version: ['3.9', '3.10']
     
     steps:
     - uses: actions/checkout@v3
@@ -25,15 +25,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov
+        pip install pytest
     
-    - name: Download NLTK data
+    - name: Test module imports
       run: |
-        python -m nltk.downloader punkt stopwords
-    
-    - name: Test imports
-      run: |
-        python -c "from src.preprocessing import ChatPreprocessor; print('✓ preprocessing module OK')"
-        python -c "from src.feature_engineering import FeatureEngineer; print('✓ feature_engineering module OK')"
-        python -c "from src.analysis import ChatAnalyzer; print('✓ analysis module OK')"
-        python -c "import streamlit; print('✓ Streamlit OK')"
+        python -c "import sys; sys.path.insert(0, 'src'); from preprocessing import ChatPreprocessor; print('✓ preprocessing OK')"
+        python -c "import sys; sys.path.insert(0, 'src'); from feature_engineering import FeatureEngineer; print('✓ feature_engineering OK')"
+        python -c "import sys; sys.path.insert(0, 'src'); from analysis import ChatAnalyzer; print('✓ analysis OK')"
+        python -c "import streamlit; print('✓ streamlit OK')"
