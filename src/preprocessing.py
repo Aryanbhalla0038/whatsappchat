@@ -134,8 +134,12 @@ class ChatPreprocessor:
         """Parse and combine date and time columns into datetime"""
         df = df.copy()
         
+        # Clean unicode whitespace from time column (narrow non-breaking space, etc)
+        # Replace any non-standard whitespace with regular space
+        df['time'] = df['time'].astype(str).apply(lambda x: ' '.join(x.split()))
+        
         # List of common date and time formats to try
-        date_formats = ['%d/%m/%Y', '%d/%m/%y', '%m/%d/%Y', '%m/%d/%y', 
+        date_formats = ['%d/%m/%y', '%d/%m/%Y', '%m/%d/%Y', '%m/%d/%y',
                        '%d.%m.%Y', '%d.%m.%y', '%d-%m-%Y', '%d-%m-%y',
                        '%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']
         time_formats = ['%I:%M:%S %p', '%I:%M %p', '%H:%M:%S', '%H:%M']
@@ -211,7 +215,7 @@ class ChatPreprocessor:
                 f"Sample dates: {sample_dates}\n"
                 f"Sample times: {sample_times}\n\n"
                 f"Expected formats like:\n"
-                f"  Date: DD/MM/YYYY or MM/DD/YYYY or YYYY-MM-DD\n"
+                f"  Date: DD/MM/YYYY or DD/MM/YY or MM/DD/YYYY or YYYY-MM-DD\n"
                 f"  Time: HH:MM:SS or HH:MM or H:MM:SS AM/PM"
             )
         
