@@ -10,27 +10,40 @@ import pandas as pd
 class ChatPreprocessor:
     """Preprocess WhatsApp chat exports into structured data"""
     
-    # Regex patterns for WhatsApp message formats
-    # Pattern 1: [DD/MM/YYYY, HH:MM:SS] User: Message  (with brackets and seconds)
-    PATTERN_BRACKET_SECONDS = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}:\d{2})\]\s+(.+?):\s+(.*)'
-    # Pattern 2: [DD/MM/YYYY, HH:MM] User: Message  (with brackets, no seconds)
-    PATTERN_BRACKET_NO_SECONDS = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2})\]\s+(.+?):\s+(.*)'
-    # Pattern 3: [DD/MM/YYYY, HH:MM AM/PM] User: Message  (with brackets and AM/PM)
-    PATTERN_BRACKET_AMPM = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}\s*[AP]M)\]\s+(.+?):\s+(.*)'
-    # Pattern 4: DD/MM/YYYY, HH:MM - User: Message  (no brackets, with dash)
-    PATTERN_DASH = r'(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s+(.+?):\s+(.*)'
-    # Pattern 5: M/D/YYYY, H:MM:SS AM/PM User: Message (US format no brackets)
+    # Regex patterns for WhatsApp message formats (ordered by most common to least common)
+    # Pattern 1: [DD/MM/YYYY, HH:MM:SS] User: Message  (with brackets and seconds, 24-hour, 4-digit year)
+    PATTERN_BRACKET_SECONDS = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{4}),\s+(\d{1,2}:\d{2}:\d{2})\]\s+(.+?):\s+(.*)'
+    # Pattern 2: [DD/MM/YY, HH:MM:SS] User: Message  (with brackets and seconds, 24-hour, 2-digit year) - iOS
+    PATTERN_BRACKET_SECONDS_YY = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2}),\s+(\d{1,2}:\d{2}:\d{2})\]\s+(.+?):\s+(.*)'
+    # Pattern 3: [DD/MM/YY, H:MM:SS AM/PM] User: Message  (iOS format with 12-hour, 2-digit year)
+    PATTERN_BRACKET_AMPM_YY = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2}),\s+(\d{1,2}:\d{2}:\d{2}\s+[AP]M)\]\s+(.+?):\s+(.*)'
+    # Pattern 4: [DD/MM/YYYY, HH:MM:SS AM/PM] User: Message  (with brackets and seconds, 12-hour, 4-digit year)
+    PATTERN_BRACKET_SEC_AMPM = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{4}),\s+(\d{1,2}:\d{2}:\d{2}\s+[AP]M)\]\s+(.+?):\s+(.*)'
+    # Pattern 5: [DD/MM/YYYY, HH:MM] User: Message  (with brackets, no seconds)
+    PATTERN_BRACKET_NO_SECONDS = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{4}),\s+(\d{1,2}:\d{2})\]\s+(.+?):\s+(.*)'
+    # Pattern 6: [DD/MM/YYYY, HH:MM AM/PM] User: Message  (with brackets and AM/PM)
+    PATTERN_BRACKET_AMPM = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{4}),\s+(\d{1,2}:\d{2}\s+[AP]M)\]\s+(.+?):\s+(.*)'
+    # Pattern 7: DD/MM/YYYY, HH:MM - User: Message  (no brackets, with dash)
+    PATTERN_DASH = r'(\d{1,2}[./\-]\d{1,2}[./\-]\d{4}),\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s+[AP]M)?)\s*-\s+(.+?):\s+(.*)'
+    # Pattern 8: DD/MM/YY, HH:MM - User: Message (2-digit year with dash)
+    PATTERN_DASH_YY = r'(\d{1,2}[./\-]\d{1,2}[./\-]\d{2}),\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s+[AP]M)?)\s*-\s+(.+?):\s+(.*)'
+    # Pattern 9: M/D/YYYY, H:MM:SS AM/PM User: Message (US format no brackets)
     PATTERN_US = r'^(\d{1,2}/\d{1,2}/\d{4}),\s+(\d{1,2}:\d{2}(?::\d{2})?\s+[AP]M)\s+(.+?):\s+(.*)'
-    # Pattern 6: [YYYY-MM-DD, HH:MM:SS] User: Message (ISO format with brackets)
-    PATTERN_ISO_BRACKET = r'\[(\d{4}[./\-]\d{1,2}[./\-]\d{1,2}),\s+(\d{1,2}:\d{2}:\d{2})\]\s+(.+?):\s+(.*)'
-    # Pattern 7: YYYY-MM-DD HH:MM:SS - User: Message (ISO format no brackets)
+    # Pattern 10: YYYY-MM-DD HH:MM:SS - User: Message (ISO format no brackets)
     PATTERN_ISO_DASH = r'(\d{4}[./\-]\d{1,2}[./\-]\d{1,2})\s+(\d{1,2}:\d{2}:\d{2})\s+-\s+(.+?):\s+(.*)'
-    # Pattern 8: [DD/MM/YYYY, HH:MM:SS AM/PM] User: Message (with seconds and AM/PM)
-    PATTERN_BRACKET_SEC_AMPM = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}:\d{2}\s*[AP]M)\]\s+(.+?):\s+(.*)'
     
-    MESSAGE_PATTERNS = [PATTERN_BRACKET_SECONDS, PATTERN_BRACKET_NO_SECONDS, 
-                       PATTERN_BRACKET_AMPM, PATTERN_BRACKET_SEC_AMPM, 
-                       PATTERN_DASH, PATTERN_US, PATTERN_ISO_BRACKET, PATTERN_ISO_DASH]
+    MESSAGE_PATTERNS = [
+        PATTERN_BRACKET_AMPM_YY,        # iOS most common
+        PATTERN_BRACKET_SECONDS_YY,     # iOS 24-hour
+        PATTERN_BRACKET_SECONDS,        # Standard with 4-digit year
+        PATTERN_BRACKET_SEC_AMPM,       # Standard with 12-hour
+        PATTERN_BRACKET_AMPM,           # Standard 12-hour
+        PATTERN_BRACKET_NO_SECONDS,     # Standard no seconds
+        PATTERN_DASH_YY,                # 2-digit year with dash
+        PATTERN_DASH,                   # 4-digit year with dash
+        PATTERN_US,                     # US format
+        PATTERN_ISO_DASH                # ISO format
+    ]
     
     def __init__(self):
         self.df = None
@@ -138,11 +151,14 @@ class ChatPreprocessor:
         # Replace any non-standard whitespace with regular space
         df['time'] = df['time'].astype(str).apply(lambda x: ' '.join(x.split()))
         
-        # List of common date and time formats to try
-        date_formats = ['%d/%m/%y', '%d/%m/%Y', '%m/%d/%Y', '%m/%d/%y',
-                       '%d.%m.%Y', '%d.%m.%y', '%d-%m-%Y', '%d-%m-%y',
-                       '%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']
-        time_formats = ['%I:%M:%S %p', '%I:%M %p', '%H:%M:%S', '%H:%M']
+        # List of common date and time formats to try (2-digit years first for iOS)
+        date_formats = ['%d/%m/%y', '%m/%d/%y',  # 2-digit year (iOS common)
+                       '%d/%m/%Y', '%m/%d/%Y',  # 4-digit year
+                       '%d.%m.%y', '%d.%m.%Y', '%m.%d.%y', '%m.%d.%Y',  # Dot separator
+                       '%d-%m-%y', '%d-%m-%Y', '%m-%d-%y', '%m-%d-%Y',  # Dash separator
+                       '%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']  # ISO format
+        time_formats = ['%I:%M:%S %p', '%I:%M %p',  # 12-hour with AM/PM
+                       '%H:%M:%S', '%H:%M']  # 24-hour
         
         timestamp = None
         
@@ -215,7 +231,7 @@ class ChatPreprocessor:
                 f"Sample dates: {sample_dates}\n"
                 f"Sample times: {sample_times}\n\n"
                 f"Expected formats like:\n"
-                f"  Date: DD/MM/YYYY or DD/MM/YY or MM/DD/YYYY or YYYY-MM-DD\n"
+                f"  Date: DD/MM/YY or MM/DD/YY or DD/MM/YYYY\n"
                 f"  Time: HH:MM:SS or HH:MM or H:MM:SS AM/PM"
             )
         
