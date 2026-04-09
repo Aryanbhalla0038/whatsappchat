@@ -19,9 +19,11 @@ class ChatPreprocessor:
     PATTERN_BRACKET_AMPM = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}\s*[AP]M)\]\s+(.+?):\s+(.*)'
     # Pattern 4: DD/MM/YYYY, HH:MM - User: Message  (no brackets, with dash)
     PATTERN_DASH = r'(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s+(.+?):\s+(.*)'
+    # Pattern 5: M/D/YYYY, H:MM:SS AM/PM User: Message (US format no brackets)
+    PATTERN_US = r'^(\d{1,2}/\d{1,2}/\d{4}),\s+(\d{1,2}:\d{2}(?::\d{2})?\s+[AP]M)\s+(.+?):\s+(.*)'
     
     MESSAGE_PATTERNS = [PATTERN_BRACKET_SECONDS, PATTERN_BRACKET_NO_SECONDS, 
-                       PATTERN_BRACKET_AMPM, PATTERN_DASH]
+                       PATTERN_BRACKET_AMPM, PATTERN_DASH, PATTERN_US]
     
     def __init__(self):
         self.df = None
@@ -57,6 +59,10 @@ class ChatPreprocessor:
                 match = re.match(pattern, line)
                 if match:
                     break
+            
+            # Fallback: if no patterns match, try a very lenient pattern
+            if not match:
+                match = self._try_lenient_pattern(line)
                     
             if match:
                 if current_message:
@@ -82,7 +88,18 @@ class ChatPreprocessor:
         df = pd.DataFrame(messages)
         
         if df.empty:
-            raise ValueError("No messages found in chat file. Check file format.")
+            # Provide detailed error info
+            file_sample = '\n'.join([l.strip() for l in lines[:5] if l.strip()])
+            raise ValueError(
+                f"No messages found. Expected WhatsApp format like:\n"
+                f"[DD/MM/YYYY, HH:MM:SS] User: Message\n\n"
+                f"Your file starts with:\n{file_sample}\n\n"
+                f"Supported formats:\n"
+                f"- [DD/MM/YYYY, HH:MM:SS] User: Message\n"
+                f"- [DD/MM/YYYY, HH:MM] User: Message\n"
+                f"- [DD/MM/YYYY, HH:MM AM/PM] User: Message\n"
+                f"- DD/MM/YYYY, HH:MM - User: Message"
+            )
         
         # Parse datetime
         df = self._parse_datetime(df)
@@ -92,6 +109,19 @@ class ChatPreprocessor:
         
         self.df = df
         return df
+    
+    def _try_lenient_pattern(self, line: str):
+        """Try a very lenient pattern for edge cases"""
+        # Pattern: anything with date-like start and a colon separator
+        lenient = r'^\[?(.+?)[,\s]\s+(.+?)\]?\s+(.+?):\s+(.*)'
+        match = re.match(lenient, line)
+        
+        if match:
+            date_str, time_str, user, text = match.groups()
+            # Only accept if date and time look reasonable
+            if any(c.isdigit() for c in date_str) and ':' in time_str:
+                return match
+        return None
     
     def _parse_datetime(self, df: pd.DataFrame) -> pd.DataFrame:
         """Parse and combine date and time columns into datetime"""

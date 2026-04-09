@@ -105,44 +105,53 @@ def main():
         
         # Process data
         if hasattr(st.session_state, 'df_raw'):
-            if st.button("🔄 Process Chat", use_container_width=True):
-                try:
-                    with st.spinner("Processing chat..."):
-                        # Save temporary file
-                        temp_path = "temp_chat.txt"
-                        with open(temp_path, 'w', encoding='utf-8') as f:
-                            f.write(st.session_state.df_raw)
-                        
-                        # Preprocess
-                        preprocessor = ChatPreprocessor()
-                        raw_df = preprocessor.parse_chat_file(temp_path)
-                        
-                        # --- MASTER COLUMN FIXES ---
-                        # Ensure standard column naming conventions for the app to use safely
-                        col_map = {c.lower(): c for c in raw_df.columns}
-                        
-                        # Ensure 'message' exists
-                        msg_col = col_map.get('message', col_map.get('user_message', list(raw_df.columns)[-1]))
-                        
-                        # Calculate core metrics ONCE here, so the tabs don't crash later
-                        raw_df['message_length'] = raw_df[msg_col].astype(str).str.len()
-                        raw_df['emoji_count'] = raw_df[msg_col].astype(str).apply(lambda x: emoji.emoji_count(x))
-                        
-                        st.session_state.df = raw_df
-                        
-                        # Feature engineering
-                        engineer = FeatureEngineer(st.session_state.df)
-                        st.session_state.df_features = engineer.get_all_features()
-                        
-                        # Analysis
-                        st.session_state.analyzer = ChatAnalyzer(st.session_state.df_features)
-                        
-                        st.success("✅ Chat processed successfully!")
-                        
-                        # Clean up
-                        os.remove(temp_path)
-                except Exception as e:
-                    st.error(f"Error processing chat: {str(e)}")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Process Chat", use_container_width=True):
+                    try:
+                        with st.spinner("Processing chat..."):
+                            # Save temporary file
+                            temp_path = "temp_chat.txt"
+                            with open(temp_path, 'w', encoding='utf-8') as f:
+                                f.write(st.session_state.df_raw)
+                            
+                            # Preprocess
+                            preprocessor = ChatPreprocessor()
+                            raw_df = preprocessor.parse_chat_file(temp_path)
+                            
+                            # --- MASTER COLUMN FIXES ---
+                            # Ensure standard column naming conventions for the app to use safely
+                            col_map = {c.lower(): c for c in raw_df.columns}
+                            
+                            # Ensure 'message' exists
+                            msg_col = col_map.get('message', col_map.get('user_message', list(raw_df.columns)[-1]))
+                            
+                            # Calculate core metrics ONCE here, so the tabs don't crash later
+                            raw_df['message_length'] = raw_df[msg_col].astype(str).str.len()
+                            raw_df['emoji_count'] = raw_df[msg_col].astype(str).apply(lambda x: emoji.emoji_count(x))
+                            
+                            st.session_state.df = raw_df
+                            
+                            # Feature engineering
+                            engineer = FeatureEngineer(st.session_state.df)
+                            st.session_state.df_features = engineer.get_all_features()
+                            
+                            # Analysis
+                            st.session_state.analyzer = ChatAnalyzer(st.session_state.df_features)
+                            
+                            st.success("✅ Chat processed successfully!")
+                            
+                            # Clean up
+                            os.remove(temp_path)
+                    except Exception as e:
+                        st.error(f"Error processing chat: {str(e)}")
+            
+            with col2:
+                if st.button("🔍 Inspect Format", use_container_width=True):
+                    st.info("First 5 lines of your file:")
+                    lines = st.session_state.df_raw.split('\n')[:5]
+                    for i, line in enumerate(lines, 1):
+                        st.code(line, language=None)
     
     # Main content
     st.title("💬 WhatsApp Chat Analyzer")
