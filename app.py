@@ -30,7 +30,7 @@ st.markdown("""
         /* Main layout */
         .main {
             padding: 2rem 2rem;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            background: #ffffff;
             min-height: 100vh;
         }
         
@@ -108,6 +108,8 @@ st.markdown("""
         .stTabs [data-baseweb="tab-list"] {
             gap: 1rem;
             border-bottom: 2px solid #e5e7eb;
+            background: #f9fafb;
+            padding: 0 1rem;
         }
         
         .stTabs [data-baseweb="tab"] {
@@ -125,19 +127,22 @@ st.markdown("""
             border-bottom: 3px solid #6366f1;
         }
         
-        /* Info boxes */
-        .stInfo, [data-testid="stAlert"] {
-            background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%);
+        /* Alert and Info boxes - REMOVE BACKGROUND COLOR */
+        [data-testid="stAlert"] {
+            background: white;
             border-left: 4px solid #6366f1;
             border-radius: 8px;
             padding: 1rem;
+            border-top: none;
+            border-right: none;
+            border-bottom: none;
         }
         
-        /* Success boxes */
-        [data-testid="toastContainer"] {
-            background: #10b981;
-            color: white;
+        /* File uploader styling */
+        .stFileUploadDropzone {
+            border: 2px dashed #d1d5db;
             border-radius: 8px;
+            background: white;
         }
         
         /* Input fields */
@@ -147,6 +152,7 @@ st.markdown("""
             border-radius: 6px;
             padding: 0.75rem;
             font-size: 0.95rem;
+            background: white;
         }
         
         /* Markdown */
@@ -157,7 +163,7 @@ st.markdown("""
         
         /* Divider */
         hr {
-            background: linear-gradient(90deg, transparent, #d1d5db, transparent);
+            background: #e5e7eb;
             border: none;
             height: 1px;
             margin: 1.5rem 0;
@@ -167,7 +173,19 @@ st.markdown("""
         .plotly-graph-div {
             background: white !important;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            padding: 1rem;
+        }
+        
+        /* Content containers */
+        .element-container {
+            background: white;
+        }
+        
+        [data-testid="stMetricContainer"] {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
         }
     </style>
 """, unsafe_allow_html=True)
