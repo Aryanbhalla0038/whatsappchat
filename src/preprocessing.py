@@ -21,9 +21,16 @@ class ChatPreprocessor:
     PATTERN_DASH = r'(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s+(.+?):\s+(.*)'
     # Pattern 5: M/D/YYYY, H:MM:SS AM/PM User: Message (US format no brackets)
     PATTERN_US = r'^(\d{1,2}/\d{1,2}/\d{4}),\s+(\d{1,2}:\d{2}(?::\d{2})?\s+[AP]M)\s+(.+?):\s+(.*)'
+    # Pattern 6: [YYYY-MM-DD, HH:MM:SS] User: Message (ISO format with brackets)
+    PATTERN_ISO_BRACKET = r'\[(\d{4}[./\-]\d{1,2}[./\-]\d{1,2}),\s+(\d{1,2}:\d{2}:\d{2})\]\s+(.+?):\s+(.*)'
+    # Pattern 7: YYYY-MM-DD HH:MM:SS - User: Message (ISO format no brackets)
+    PATTERN_ISO_DASH = r'(\d{4}[./\-]\d{1,2}[./\-]\d{1,2})\s+(\d{1,2}:\d{2}:\d{2})\s+-\s+(.+?):\s+(.*)'
+    # Pattern 8: [DD/MM/YYYY, HH:MM:SS AM/PM] User: Message (with seconds and AM/PM)
+    PATTERN_BRACKET_SEC_AMPM = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}:\d{2}\s*[AP]M)\]\s+(.+?):\s+(.*)'
     
     MESSAGE_PATTERNS = [PATTERN_BRACKET_SECONDS, PATTERN_BRACKET_NO_SECONDS, 
-                       PATTERN_BRACKET_AMPM, PATTERN_DASH, PATTERN_US]
+                       PATTERN_BRACKET_AMPM, PATTERN_BRACKET_SEC_AMPM, 
+                       PATTERN_DASH, PATTERN_US, PATTERN_ISO_BRACKET, PATTERN_ISO_DASH]
     
     def __init__(self):
         self.df = None
@@ -129,10 +136,13 @@ class ChatPreprocessor:
         
         # List of common date and time formats to try
         date_formats = ['%d/%m/%Y', '%d/%m/%y', '%m/%d/%Y', '%m/%d/%y', 
-                       '%d.%m.%Y', '%d.%m.%y', '%d-%m-%Y', '%d-%m-%y']
-        time_formats = ['%I:%M:%S %p', '%H:%M:%S', '%I:%M %p', '%H:%M']
+                       '%d.%m.%Y', '%d.%m.%y', '%d-%m-%Y', '%d-%m-%y',
+                       '%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']
+        time_formats = ['%I:%M:%S %p', '%I:%M %p', '%H:%M:%S', '%H:%M']
         
         timestamp = None
+        
+        # Try with space separator first
         for date_fmt in date_formats:
             if timestamp is not None:
                 break
@@ -146,17 +156,64 @@ class ChatPreprocessor:
                 except (ValueError, TypeError):
                     continue
         
+        # Try without space separator
+        if timestamp is None:
+            for date_fmt in date_formats:
+                if timestamp is not None:
+                    break
+                for time_fmt in time_formats:
+                    try:
+                        timestamp = pd.to_datetime(
+                            df['date'] + df['time'],
+                            format=f'{date_fmt}{time_fmt}'
+                        )
+                        break
+                    except (ValueError, TypeError):
+                        continue
+        
+        # Fallback: try pandas infer_datetime_format
+        if timestamp is None:
+            try:
+                timestamp = pd.to_datetime(
+                    df['date'] + ' ' + df['time'],
+                    infer_datetime_format=True,
+                    errors='coerce'
+                )
+                # Check if any values were successfully parsed
+                if timestamp.isna().all():
+                    timestamp = None
+            except:
+                pass
+        
+        # Last resort: try stripping and recombining
+        if timestamp is None:
+            try:
+                date_clean = df['date'].astype(str).str.strip()
+                time_clean = df['time'].astype(str).str.strip()
+                timestamp = pd.to_datetime(
+                    date_clean + ' ' + time_clean,
+                    infer_datetime_format=True,
+                    errors='coerce'
+                )
+                if timestamp.isna().all():
+                    timestamp = None
+            except:
+                pass
+        
         if timestamp is not None:
             df['timestamp'] = timestamp
         else:
-            # Fallback: try pandas infer_datetime_format
-            try:
-                df['timestamp'] = pd.to_datetime(
-                    df['date'] + ' ' + df['time'],
-                    infer_datetime_format=True
-                )
-            except:
-                raise ValueError(f"Could not parse datetime. Check date format in your export.")
+            # Provide detailed error with sample data
+            sample_dates = df['date'].head(3).tolist()
+            sample_times = df['time'].head(3).tolist()
+            raise ValueError(
+                f"Could not parse datetime. Check date format in your export.\n\n"
+                f"Sample dates: {sample_dates}\n"
+                f"Sample times: {sample_times}\n\n"
+                f"Expected formats like:\n"
+                f"  Date: DD/MM/YYYY or MM/DD/YYYY or YYYY-MM-DD\n"
+                f"  Time: HH:MM:SS or HH:MM or H:MM:SS AM/PM"
+            )
         
         df = df.drop(['date', 'time'], axis=1)
         return df
