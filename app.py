@@ -6,6 +6,7 @@ import emoji
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import sys
 import os
 
@@ -323,12 +324,13 @@ def main():
     date_col = next((col for col in ['timestamp', 'only_date', 'date', 'Date', 'Date_Time'] if col in st.session_state.df.columns), None)
     
     # Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Overview",
         "👥 User Analysis",
         "📈 Trends",
         "💭 Text Analysis",
-        "🤖 Advanced"
+        "🤖 Advanced",
+        "🚀 Intelligence"
     ])
     
     # ============= TAB 1: OVERVIEW =============
@@ -595,13 +597,33 @@ def main():
     with tab5:
         st.subheader("Advanced Analytics")
         
-        # Sentiment indicators
-        st.write("**Sentiment Indicators by User**")
+        # Multilingual sentiment indicators
+        st.write("**Multilingual Sentiment (English + Hindi + Punjabi + Hinglish)**")
         try:
-            sentiment = st.session_state.analyzer.get_sentiment_indicators()
-            if sentiment:
-                sentiment_df = pd.DataFrame(sentiment).T
+            sentiment = st.session_state.analyzer.get_multilingual_sentiment()
+            if sentiment and sentiment.get('user_sentiment'):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Overall Mood", sentiment.get('overall_label', 'Neutral'))
+                with col2:
+                    st.metric("Overall Score", sentiment.get('overall_score', 0.0))
+
+                sentiment_df = pd.DataFrame(sentiment['user_sentiment'])
                 st.dataframe(sentiment_df, use_container_width=True)
+
+                fig = px.bar(
+                    sentiment_df,
+                    x='user',
+                    y='avg_sentiment',
+                    color='sentiment_label',
+                    color_discrete_map={
+                        'Positive': '#16a34a',
+                        'Neutral': '#64748b',
+                        'Negative': '#dc2626'
+                    },
+                    title='Per-User Multilingual Sentiment Score'
+                )
+                st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Sentiment data not available.")
         except Exception as e:
@@ -648,6 +670,145 @@ def main():
                 file_name="chat_analysis.csv",
                 mime="text/csv"
             )
+
+    # ============= TAB 6: INTELLIGENCE =============
+    with tab6:
+        st.subheader("Intelligence Layer")
+
+        # 1) AI Weekly Narrative Recaps
+        st.write("**1) Weekly Narrative Recaps**")
+        try:
+            recaps = st.session_state.analyzer.get_weekly_narrative_recaps()
+            if recaps:
+                for row in recaps[-8:]:
+                    st.markdown(f"- {row['summary']}")
+            else:
+                st.info("Not enough weekly data for narrative recaps.")
+        except Exception:
+            st.warning("Could not generate weekly recaps.")
+
+        st.markdown("---")
+
+        # 2) Reply Dynamics Engine
+        st.write("**2) Reply Dynamics Engine**")
+        try:
+            dynamics = st.session_state.analyzer.get_reply_dynamics()
+            user_reply = pd.DataFrame(dynamics.get('user_reply_stats', []))
+            pair_reply = pd.DataFrame(dynamics.get('pair_reply_stats', []))
+
+            if not user_reply.empty:
+                user_reply = user_reply.sort_values('median')
+                fig = px.bar(
+                    user_reply,
+                    x='user',
+                    y='median',
+                    title='Median Reply Time by User (seconds)',
+                    color_discrete_sequence=['#0ea5e9']
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.dataframe(user_reply, use_container_width=True)
+
+            if not pair_reply.empty:
+                st.write("Pairwise Reply Latency")
+                st.dataframe(pair_reply.sort_values('median'), use_container_width=True)
+        except Exception:
+            st.warning("Could not generate reply dynamics.")
+
+        st.markdown("---")
+
+        # 3) Topic Journey Timeline
+        st.write("**3) Topic Journey Timeline**")
+        try:
+            topic_data = st.session_state.analyzer.get_topic_journey(n_topics=4, top_words=6)
+            topic_timeline = pd.DataFrame(topic_data.get('timeline', []))
+            topic_table = pd.DataFrame(topic_data.get('topics', []))
+
+            if not topic_timeline.empty:
+                fig = px.area(
+                    topic_timeline,
+                    x='week',
+                    y='message_count',
+                    color='topic_label',
+                    groupnorm='fraction',
+                    title='Topic Share Over Time'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            if not topic_table.empty:
+                st.dataframe(topic_table[['topic_label', 'keywords']], use_container_width=True)
+
+            if topic_timeline.empty and topic_table.empty:
+                st.info("Not enough data for topic modeling yet (need a larger chat history).")
+        except Exception:
+            st.warning("Could not generate topic journey.")
+
+        st.markdown("---")
+
+        # 4) Relationship Graph and Influence Map
+        st.write("**4) Relationship Graph and Influence Map**")
+        try:
+            influence_data = st.session_state.analyzer.get_relationship_influence_map()
+            edges = pd.DataFrame(influence_data.get('edges', []))
+            influence = pd.DataFrame(influence_data.get('influence', []))
+
+            if not edges.empty:
+                users = sorted(set(edges['source'].tolist() + edges['target'].tolist()))
+                user_to_idx = {u: i for i, u in enumerate(users)}
+
+                sankey = go.Figure(
+                    data=[
+                        go.Sankey(
+                            node=dict(
+                                pad=15,
+                                thickness=18,
+                                line=dict(color='gray', width=0.4),
+                                label=users
+                            ),
+                            link=dict(
+                                source=[user_to_idx[s] for s in edges['source']],
+                                target=[user_to_idx[t] for t in edges['target']],
+                                value=edges['interaction_count'].tolist()
+                            )
+                        )
+                    ]
+                )
+                sankey.update_layout(title_text='Who Responds to Whom', font_size=11)
+                st.plotly_chart(sankey, use_container_width=True)
+
+            if not influence.empty:
+                st.dataframe(influence, use_container_width=True)
+
+            if edges.empty and influence.empty:
+                st.info("Not enough transitions to build a relationship map.")
+        except Exception:
+            st.warning("Could not build relationship influence map.")
+
+        st.markdown("---")
+
+        # 5) Semantic Search + QA
+        st.write("**5) Semantic Chat Search + QA**")
+        query = st.text_input(
+            "Ask a question about your chat",
+            placeholder="e.g., when did we talk about internships or travel plans?",
+            key="semantic_query"
+        )
+
+        if st.button("Run Semantic Search", key="run_semantic_search"):
+            if query.strip():
+                try:
+                    search_result = st.session_state.analyzer.semantic_chat_search(query=query, top_k=6)
+                    st.success(search_result.get('answer', 'No answer generated.'))
+
+                    result_df = pd.DataFrame(search_result.get('results', []))
+                    if not result_df.empty:
+                        result_df['score'] = result_df['score'].round(4)
+                        st.dataframe(result_df[['score', 'user', 'timestamp', 'message']], use_container_width=True)
+                    else:
+                        st.info("No relevant messages found for this query.")
+                except Exception:
+                    st.warning("Semantic search could not be completed.")
+            else:
+                st.info("Enter a question first.")
 
 
 if __name__ == "__main__":
