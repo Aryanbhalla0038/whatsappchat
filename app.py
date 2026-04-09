@@ -24,17 +24,150 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom styling
+# Custom styling - Modern Neutral Design
 st.markdown("""
     <style>
+        /* Main layout */
         .main {
-            padding: 0rem 0rem;
+            padding: 2rem 2rem;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
         }
+        
+        /* Headers and Typography */
+        h1 {
+            color: #1f2937;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.5px;
+        }
+        
+        h2 {
+            color: #374151;
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+        
+        h3 {
+            color: #4b5563;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        /* Metric cards */
         .metric-card {
-            background-color: #f0f2f6;
-            padding: 20px;
-            border-radius: 10px;
-            margin: 10px 0;
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-left: 4px solid #6366f1;
+            margin: 0.5rem 0;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+        }
+        
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {
+            background: white;
+            border-right: 1px solid #e5e7eb;
+        }
+        
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+            color: #1f2937;
+        }
+        
+        /* Buttons */
+        .stButton > button {
+            background: linear-gradient(135deg, #6366f1 0%, #5b61e8 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .stButton > button:hover {
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            background: transparent;
+            border-radius: 8px 8px 0 0;
+            color: #6b7280;
+            font-weight: 600;
+            padding: 1rem 1.5rem;
+            border: none;
+        }
+        
+        .stTabs [aria-selected="true"] {
+            background: white;
+            color: #6366f1;
+            border-bottom: 3px solid #6366f1;
+        }
+        
+        /* Info boxes */
+        .stInfo, [data-testid="stAlert"] {
+            background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%);
+            border-left: 4px solid #6366f1;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        
+        /* Success boxes */
+        [data-testid="toastContainer"] {
+            background: #10b981;
+            color: white;
+            border-radius: 8px;
+        }
+        
+        /* Input fields */
+        .stTextInput > div > div > input,
+        .stSelectbox > div > div > select {
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 0.75rem;
+            font-size: 0.95rem;
+        }
+        
+        /* Markdown */
+        p {
+            color: #4b5563;
+            line-height: 1.6;
+        }
+        
+        /* Divider */
+        hr {
+            background: linear-gradient(90deg, transparent, #d1d5db, transparent);
+            border: none;
+            height: 1px;
+            margin: 1.5rem 0;
+        }
+        
+        /* Charts background */
+        .plotly-graph-div {
+            background: white !important;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
     </style>
 """, unsafe_allow_html=True)
@@ -154,11 +287,18 @@ def main():
                         st.code(line, language=None)
     
     # Main content
-    st.title("💬 WhatsApp Chat Analyzer")
-    st.markdown("**Uncover Hidden Communication Patterns with NLP**")
+    st.markdown("""
+        <div style="margin-bottom: 2rem;">
+            <h1 style="margin: 0; padding-bottom: 0.5rem;">💬 WhatsApp Chat Analyzer</h1>
+            <p style="margin: 0; color: #6b7280; font-size: 1.1rem;">Uncover Hidden Communication Patterns with Advanced NLP</p>
+            <hr style="margin-top: 1rem; margin-bottom: 0;">
+        </div>
+    """, unsafe_allow_html=True)
     
     if "df" not in st.session_state or st.session_state.df is None:
-        st.info("💡 Please upload your WhatsApp chat to get started.")
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.info("💡 **Get Started:** Upload your WhatsApp chat file (.txt) from Android or iOS to begin analyzing your communication patterns.")
         return
     
     # Identify the correct date column dynamically to prevent KeyErrors
@@ -175,46 +315,65 @@ def main():
     
     # ============= TAB 1: OVERVIEW =============
     with tab1:
-        st.subheader("Chat Overview")
+        st.markdown("### 📊 Chat Overview & Statistics")
         
         health = st.session_state.analyzer.get_conversation_health()
         
+        # Key metrics in a clean layout
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total Messages", health.get('total_messages', 0))
+            st.metric("📨 Total Messages", health.get('total_messages', 0))
         with col2:
-            st.metric("Unique Users", health.get('unique_users', 0))
+            st.metric("👥 Unique Users", health.get('unique_users', 0))
         with col3:
             ratio = health.get('balance_ratio', 0)
-            st.metric("Chat Balance", f"{ratio:.0%}" if isinstance(ratio, (int, float)) else "N/A")
+            st.metric("⚖️ Chat Balance", f"{ratio:.0%}" if isinstance(ratio, (int, float)) else "N/A")
         with col4:
-            st.metric("Active Hours", health.get('most_active_hour', "N/A"))
+            st.metric("🕐 Peak Hour", f"{health.get('most_active_hour', 'N/A')}:00")
+        
+        st.markdown("---")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.write("**Hourly Activity**")
+            st.markdown("#### ⏰ Hourly Activity Pattern")
             try:
                 hourly = st.session_state.analyzer.get_activity_by_hour()
                 fig = px.bar(
                     x=hourly.index,
                     y=hourly.values,
                     labels={'x': 'Hour of Day', 'y': 'Messages'},
-                    title="Messages by Hour"
+                    title="When do people chat most?",
+                    color_discrete_sequence=['#6366f1']
+                )
+                fig.update_layout(
+                    hovermode='x unified',
+                    template='plotly_white',
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    height=400
                 )
                 st.plotly_chart(fig, use_container_width=True)
             except Exception as e:
                 st.warning("Could not load hourly chart.")
         
         with col2:
-            st.write("**Daily Activity**")
+            st.markdown("#### 📅 Daily Activity Distribution")
             try:
                 daily = st.session_state.analyzer.get_activity_by_day()
                 fig = px.bar(
                     x=daily.index,
                     y=daily.values,
-                    labels={'x': 'Day', 'y': 'Messages'},
-                    title="Messages by Day of Week"
+                    labels={'x': 'Day of Week', 'y': 'Messages'},
+                    title="Which days are most active?",
+                    color_discrete_sequence=['#06b6d4']
+                )
+                fig.update_layout(
+                    hovermode='x unified',
+                    template='plotly_white',
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    height=400
                 )
                 st.plotly_chart(fig, use_container_width=True)
             except Exception as e:
