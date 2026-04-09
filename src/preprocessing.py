@@ -10,9 +10,18 @@ import pandas as pd
 class ChatPreprocessor:
     """Preprocess WhatsApp chat exports into structured data"""
     
-    # Regex pattern for WhatsApp message format (updated format)
-    # Handles: [HH:MM, DD/MM/YYYY] or [DD/MM/YY, HH:MM] patterns
-    MESSAGE_PATTERN = r'\[(\d{1,2}/\d{1,2}/\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\]\s+([^:]+):\s+(.*)'
+    # Regex patterns for WhatsApp message formats
+    # Pattern 1: [DD/MM/YYYY, HH:MM:SS] User: Message  (with brackets and seconds)
+    PATTERN_BRACKET_SECONDS = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}:\d{2})\]\s+(.+?):\s+(.*)'
+    # Pattern 2: [DD/MM/YYYY, HH:MM] User: Message  (with brackets, no seconds)
+    PATTERN_BRACKET_NO_SECONDS = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2})\]\s+(.+?):\s+(.*)'
+    # Pattern 3: [DD/MM/YYYY, HH:MM AM/PM] User: Message  (with brackets and AM/PM)
+    PATTERN_BRACKET_AMPM = r'\[(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}\s*[AP]M)\]\s+(.+?):\s+(.*)'
+    # Pattern 4: DD/MM/YYYY, HH:MM - User: Message  (no brackets, with dash)
+    PATTERN_DASH = r'(\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}),\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s+(.+?):\s+(.*)'
+    
+    MESSAGE_PATTERNS = [PATTERN_BRACKET_SECONDS, PATTERN_BRACKET_NO_SECONDS, 
+                       PATTERN_BRACKET_AMPM, PATTERN_DASH]
     
     def __init__(self):
         self.df = None
@@ -41,9 +50,14 @@ class ChatPreprocessor:
             line = line.strip()
             if not line:
                 continue
-                
-            # Check if line matches message pattern
-            match = re.match(self.MESSAGE_PATTERN, line)
+            
+            # Try each pattern
+            match = None
+            for pattern in self.MESSAGE_PATTERNS:
+                match = re.match(pattern, line)
+                if match:
+                    break
+                    
             if match:
                 if current_message:
                     messages.append(current_message)
@@ -83,22 +97,36 @@ class ChatPreprocessor:
         """Parse and combine date and time columns into datetime"""
         df = df.copy()
         
-        for date_format in ['%d/%m/%Y', '%d/%m/%y', '%m/%d/%Y']:
+        # List of common date and time formats to try
+        date_formats = ['%d/%m/%Y', '%d/%m/%y', '%m/%d/%Y', '%m/%d/%y', 
+                       '%d.%m.%Y', '%d.%m.%y', '%d-%m-%Y', '%d-%m-%y']
+        time_formats = ['%I:%M:%S %p', '%H:%M:%S', '%I:%M %p', '%H:%M']
+        
+        timestamp = None
+        for date_fmt in date_formats:
+            if timestamp is not None:
+                break
+            for time_fmt in time_formats:
+                try:
+                    timestamp = pd.to_datetime(
+                        df['date'] + ' ' + df['time'],
+                        format=f'{date_fmt} {time_fmt}'
+                    )
+                    break
+                except (ValueError, TypeError):
+                    continue
+        
+        if timestamp is not None:
+            df['timestamp'] = timestamp
+        else:
+            # Fallback: try pandas infer_datetime_format
             try:
                 df['timestamp'] = pd.to_datetime(
                     df['date'] + ' ' + df['time'],
-                    format=f'{date_format} %I:%M %p'
+                    infer_datetime_format=True
                 )
-                break
             except:
-                try:
-                    df['timestamp'] = pd.to_datetime(
-                        df['date'] + ' ' + df['time'],
-                        format=f'{date_format} %H:%M:%S'
-                    )
-                    break
-                except:
-                    pass
+                raise ValueError(f"Could not parse datetime. Check date format in your export.")
         
         df = df.drop(['date', 'time'], axis=1)
         return df
