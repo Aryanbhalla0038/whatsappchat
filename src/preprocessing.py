@@ -168,11 +168,15 @@ class ChatPreprocessor:
                 break
             for time_fmt in time_formats:
                 try:
-                    timestamp = pd.to_datetime(
+                    result = pd.to_datetime(
                         df['date'] + ' ' + df['time'],
-                        format=f'{date_fmt} {time_fmt}'
+                        format=f'{date_fmt} {time_fmt}',
+                        errors='coerce'
                     )
-                    break
+                    # Accept if we successfully parsed most rows
+                    if result.notna().sum() > len(result) * 0.5:
+                        timestamp = result
+                        break
                 except (ValueError, TypeError):
                     continue
         
@@ -183,20 +187,22 @@ class ChatPreprocessor:
                     break
                 for time_fmt in time_formats:
                     try:
-                        timestamp = pd.to_datetime(
+                        result = pd.to_datetime(
                             df['date'] + df['time'],
-                            format=f'{date_fmt}{time_fmt}'
+                            format=f'{date_fmt}{time_fmt}',
+                            errors='coerce'
                         )
-                        break
+                        if result.notna().sum() > len(result) * 0.5:
+                            timestamp = result
+                            break
                     except (ValueError, TypeError):
                         continue
         
-        # Fallback: try pandas infer_datetime_format
+        # Fallback: try pandas with just errors='coerce'
         if timestamp is None:
             try:
                 timestamp = pd.to_datetime(
                     df['date'] + ' ' + df['time'],
-                    infer_datetime_format=True,
                     errors='coerce'
                 )
                 # Check if any values were successfully parsed
@@ -212,7 +218,6 @@ class ChatPreprocessor:
                 time_clean = df['time'].astype(str).str.strip()
                 timestamp = pd.to_datetime(
                     date_clean + ' ' + time_clean,
-                    infer_datetime_format=True,
                     errors='coerce'
                 )
                 if timestamp.isna().all():
