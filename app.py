@@ -2,7 +2,7 @@
 WhatsApp Chat Analyzer - Streamlit Web Application
 Real-time visualization and exploration of WhatsApp chat patterns using NLP
 """
-
+import emoji
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -115,7 +115,20 @@ def main():
                         
                         # Preprocess
                         preprocessor = ChatPreprocessor()
-                        st.session_state.df = preprocessor.parse_chat_file(temp_path)
+                        raw_df = preprocessor.parse_chat_file(temp_path)
+                        
+                        # --- MASTER COLUMN FIXES ---
+                        # Ensure standard column naming conventions for the app to use safely
+                        col_map = {c.lower(): c for c in raw_df.columns}
+                        
+                        # Ensure 'message' exists
+                        msg_col = col_map.get('message', col_map.get('user_message', list(raw_df.columns)[-1]))
+                        
+                        # Calculate core metrics ONCE here, so the tabs don't crash later
+                        raw_df['message_length'] = raw_df[msg_col].astype(str).str.len()
+                        raw_df['emoji_count'] = raw_df[msg_col].astype(str).apply(lambda x: emoji.emoji_count(x))
+                        
+                        st.session_state.df = raw_df
                         
                         # Feature engineering
                         engineer = FeatureEngineer(st.session_state.df)
@@ -139,6 +152,9 @@ def main():
         st.info("📤 Please upload a WhatsApp chat file or load sample data to get started")
         return
     
+    # Identify the correct date column dynamically to prevent KeyErrors
+    date_col = next((col for col in ['only_date', 'date', 'Date', 'Date_Time'] if col in st.session_state.df.columns), None)
+    
     # Tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Overview",
@@ -156,48 +172,58 @@ def main():
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total Messages", health['total_messages'])
+            st.metric("Total Messages", health.get('total_messages', 0))
         with col2:
-            st.metric("Unique Users", health['unique_users'])
+            st.metric("Unique Users", health.get('unique_users', 0))
         with col3:
-            st.metric("Chat Balance", f"{health['balance_ratio']:.0%}")
+            ratio = health.get('balance_ratio', 0)
+            st.metric("Chat Balance", f"{ratio:.0%}" if isinstance(ratio, (int, float)) else "N/A")
         with col4:
-            st.metric("Active Hours", health['most_active_hour'])
+            st.metric("Active Hours", health.get('most_active_hour', "N/A"))
         
         col1, col2 = st.columns(2)
         
         with col1:
             st.write("**Hourly Activity**")
-            hourly = st.session_state.analyzer.get_activity_by_hour()
-            fig = px.bar(
-                x=hourly.index,
-                y=hourly.values,
-                labels={'x': 'Hour of Day', 'y': 'Messages'},
-                title="Messages by Hour"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            try:
+                hourly = st.session_state.analyzer.get_activity_by_hour()
+                fig = px.bar(
+                    x=hourly.index,
+                    y=hourly.values,
+                    labels={'x': 'Hour of Day', 'y': 'Messages'},
+                    title="Messages by Hour"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.warning("Could not load hourly chart.")
         
         with col2:
             st.write("**Daily Activity**")
-            daily = st.session_state.analyzer.get_activity_by_day()
-            fig = px.bar(
-                x=daily.index,
-                y=daily.values,
-                labels={'x': 'Day', 'y': 'Messages'},
-                title="Messages by Day of Week"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            try:
+                daily = st.session_state.analyzer.get_activity_by_day()
+                fig = px.bar(
+                    x=daily.index,
+                    y=daily.values,
+                    labels={'x': 'Day', 'y': 'Messages'},
+                    title="Messages by Day of Week"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.warning("Could not load daily chart.")
         
         # Time series
         st.write("**Activity Over Time**")
-        daily_data = st.session_state.analyzer.get_activity_by_date()
-        fig = px.line(
-            x=daily_data.index,
-            y=daily_data.values,
-            labels={'x': 'Date', 'y': 'Messages'},
-            title="Daily Message Count"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            daily_data = st.session_state.analyzer.get_activity_by_date()
+            fig = px.line(
+                x=daily_data.index,
+                y=daily_data.values,
+                labels={'x': 'Date', 'y': 'Messages'},
+                title="Daily Message Count"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.warning("Could not load timeline chart.")
     
     # ============= TAB 2: USER ANALYSIS =============
     with tab2:
@@ -208,88 +234,96 @@ def main():
         # User selection
         selected_user = st.selectbox(
             "Select User",
-            options=list(user_stats.keys())
+            options=list(user_stats.keys()) if user_stats else []
         )
         
-        if selected_user:
+        if selected_user and user_stats:
             user_info = user_stats[selected_user]
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Messages", user_info['total_messages'])
+                st.metric("Messages", user_info.get('total_messages', 0))
             with col2:
-                st.metric("Avg Length", f"{user_info['avg_message_length']:.0f} chars")
+                st.metric("Avg Length", f"{user_info.get('avg_message_length', 0):.0f} chars")
             with col3:
-                st.metric("Avg Words", f"{user_info['avg_word_count']:.1f}")
+                st.metric("Avg Words", f"{user_info.get('avg_word_count', 0):.1f}")
             with col4:
-                st.metric("Emojis Used", int(user_info['emoji_usage']))
+                st.metric("Emojis Used", int(user_info.get('emoji_usage', 0)))
             
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("Questions", int(user_info['questions_asked']))
+                st.metric("Questions", int(user_info.get('questions_asked', 0)))
             with col2:
-                st.metric("Most Active", user_info['most_active_day'])
+                st.metric("Most Active", user_info.get('most_active_day', "N/A"))
         
         # User comparison
         st.write("**Message Count by User**")
-        user_messages = st.session_state.df['user'].value_counts()
-        fig = px.bar(
-            x=user_messages.index,
-            y=user_messages.values,
-            labels={'x': 'User', 'y': 'Number of Messages'},
-            title="Message Distribution"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        user_messages = st.session_state.df['user'].value_counts() if 'user' in st.session_state.df.columns else pd.Series()
+        if not user_messages.empty:
+            fig = px.bar(
+                x=user_messages.index,
+                y=user_messages.values,
+                labels={'x': 'User', 'y': 'Number of Messages'},
+                title="Message Distribution"
+            )
+            st.plotly_chart(fig, use_container_width=True)
         
         col1, col2 = st.columns(2)
         with col1:
             st.write("**Avg Message Length by User**")
-            user_avg_length = st.session_state.df.groupby('user')['message_length'].mean()
-            fig = px.bar(
-                x=user_avg_length.index,
-                y=user_avg_length.values,
-                labels={'x': 'User', 'y': 'Avg Length (chars)'},
-                title="Average Message Length"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if 'user' in st.session_state.df.columns and 'message_length' in st.session_state.df.columns:
+                user_avg_length = st.session_state.df.groupby('user')['message_length'].mean()
+                fig = px.bar(
+                    x=user_avg_length.index,
+                    y=user_avg_length.values,
+                    labels={'x': 'User', 'y': 'Avg Length (chars)'},
+                    title="Average Message Length"
+                )
+                st.plotly_chart(fig, use_container_width=True)
         
         with col2:
             st.write("**Emoji Usage by User**")
-            user_emojis = st.session_state.df.groupby('user')['emoji_count'].sum()
-            fig = px.bar(
-                x=user_emojis.index,
-                y=user_emojis.values,
-                labels={'x': 'User', 'y': 'Total Emojis'},
-                title="Emoji Usage"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if 'user' in st.session_state.df.columns and 'emoji_count' in st.session_state.df.columns:
+                user_emojis = st.session_state.df.groupby('user')['emoji_count'].sum()
+                fig = px.bar(
+                    x=user_emojis.index,
+                    y=user_emojis.values,
+                    labels={'x': 'User', 'y': 'Total Emojis'},
+                    title="Emoji Usage"
+                )
+                st.plotly_chart(fig, use_container_width=True)
     
     # ============= TAB 3: TRENDS =============
     with tab3:
         st.subheader("Communication Trends")
         
         # Weekly trends
-        weekly_trends = st.session_state.analyzer.get_conversation_trends()
-        
-        fig = px.line(
-            weekly_trends,
-            x='week_label',
-            y='message_count',
-            markers=True,
-            title="Weekly Message Trends"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            weekly_trends = st.session_state.analyzer.get_conversation_trends()
+            fig = px.line(
+                weekly_trends,
+                x='week_label',
+                y='message_count',
+                markers=True,
+                title="Weekly Message Trends"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.warning("Weekly trends not available.")
         
         # Message length trends
         st.write("**Message Length Over Time**")
-        daily_avg_length = st.session_state.df.groupby('date')['message_length'].mean()
-        fig = px.line(
-            x=daily_avg_length.index,
-            y=daily_avg_length.values,
-            labels={'x': 'Date', 'y': 'Avg Message Length'},
-            title="Average Message Length Trend"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if date_col and 'message_length' in st.session_state.df.columns:
+            daily_avg_length = st.session_state.df.groupby(date_col)['message_length'].mean()
+            fig = px.line(
+                x=daily_avg_length.index,
+                y=daily_avg_length.values,
+                labels={'x': 'Date', 'y': 'Avg Message Length'},
+                title="Average Message Length Trend"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Date information missing for trend chart.")
     
     # ============= TAB 4: TEXT ANALYSIS =============
     with tab4:
@@ -320,11 +354,12 @@ def main():
         
         with col2:
             st.write("**Message Properties**")
+            # Using .get() safely defaults to 0 if the preprocessor didn't create these columns
             properties = {
-                'Questions': st.session_state.df['is_question'].sum(),
-                'Exclamations': st.session_state.df['is_exclamation'].sum(),
-                'URLs': st.session_state.df['url_count'].sum(),
-                'Mentions': st.session_state.df['mention_count'].sum()
+                'Questions': st.session_state.df.get('is_question', pd.Series([0])).sum(),
+                'Exclamations': st.session_state.df.get('is_exclamation', pd.Series([0])).sum(),
+                'URLs': st.session_state.df.get('url_count', pd.Series([0])).sum(),
+                'Mentions': st.session_state.df.get('mention_count', pd.Series([0])).sum()
             }
             prop_df = pd.DataFrame(list(properties.items()), columns=['Type', 'Count'])
             fig = px.bar(
@@ -338,22 +373,25 @@ def main():
         # Top keywords
         st.write("**Top Keywords**")
         try:
-            keywords = st.session_state.analyzer.df_features = st.session_state.df_features or st.session_state.df
-            engineer = FeatureEngineer(st.session_state.df)
+            # Fixed the chained assignment bug here
+            engineer = FeatureEngineer(st.session_state.df_features)
             top_keywords = engineer.extract_keywords(top_n=15)
             
-            kw_df = pd.DataFrame(
-                list(top_keywords.items()),
-                columns=['Keyword', 'Frequency']
-            ).sort_values('Frequency', ascending=False)
-            
-            fig = px.bar(
-                kw_df,
-                x='Keyword',
-                y='Frequency',
-                title="Top 15 Keywords"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if top_keywords:
+                kw_df = pd.DataFrame(
+                    list(top_keywords.items()),
+                    columns=['Keyword', 'Frequency']
+                ).sort_values('Frequency', ascending=False)
+                
+                fig = px.bar(
+                    kw_df,
+                    x='Keyword',
+                    y='Frequency',
+                    title="Top 15 Keywords"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Not enough data to extract keywords.")
         except Exception as e:
             st.warning(f"Could not analyze keywords: {e}")
     
@@ -365,31 +403,41 @@ def main():
         st.write("**Sentiment Indicators by User**")
         try:
             sentiment = st.session_state.analyzer.get_sentiment_indicators()
-            sentiment_df = pd.DataFrame(sentiment).T
-            st.dataframe(sentiment_df, use_container_width=True)
+            if sentiment:
+                sentiment_df = pd.DataFrame(sentiment).T
+                st.dataframe(sentiment_df, use_container_width=True)
+            else:
+                st.info("Sentiment data not available.")
         except Exception as e:
-            st.warning(f"Could not analyze sentiment: {e}")
+            st.warning("Could not analyze sentiment.")
         
         # Message length statistics
         st.write("**Message Length Statistics**")
-        msg_stats = st.session_state.analyzer.get_message_length_stats()
-        msg_stats_df = pd.DataFrame(msg_stats).T
-        st.dataframe(msg_stats_df, use_container_width=True)
+        try:
+            msg_stats = st.session_state.analyzer.get_message_length_stats()
+            if msg_stats:
+                msg_stats_df = pd.DataFrame(msg_stats).T
+                st.dataframe(msg_stats_df, use_container_width=True)
+        except Exception as e:
+            st.warning("Could not calculate message stats.")
         
         # Response patterns
         st.write("**Response Patterns**")
         try:
             patterns = st.session_state.analyzer.get_response_patterns()
-            for user, responses in patterns.items():
-                if responses:
-                    st.write(f"**{user}** is typically followed by:")
-                    resp_df = pd.DataFrame(
-                        list(responses.items()),
-                        columns=['Respondent', 'Times']
-                    )
-                    st.bar_chart(resp_df.set_index('Respondent'))
+            if patterns:
+                for user, responses in patterns.items():
+                    if responses:
+                        st.write(f"**{user}** is typically followed by:")
+                        resp_df = pd.DataFrame(
+                            list(responses.items()),
+                            columns=['Respondent', 'Times']
+                        )
+                        st.bar_chart(resp_df.set_index('Respondent'))
+            else:
+                st.info("Not enough data for response patterns.")
         except Exception as e:
-            st.warning(f"Could not analyze response patterns: {e}")
+            st.warning("Could not analyze response patterns.")
         
         # Raw data
         st.write("**Raw Data Export**")
@@ -397,7 +445,7 @@ def main():
             st.dataframe(st.session_state.df_features, use_container_width=True)
             
             # Download button
-            csv = st.session_state.df_features.to_csv(index=False)
+            csv = st.session_state.df_features.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="Download CSV",
                 data=csv,
