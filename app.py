@@ -162,7 +162,7 @@ def main():
         return
     
     # Identify the correct date column dynamically to prevent KeyErrors
-    date_col = next((col for col in ['only_date', 'date', 'Date', 'Date_Time'] if col in st.session_state.df.columns), None)
+    date_col = next((col for col in ['timestamp', 'only_date', 'date', 'Date', 'Date_Time'] if col in st.session_state.df.columns), None)
     
     # Tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -323,14 +323,24 @@ def main():
         # Message length trends
         st.write("**Message Length Over Time**")
         if date_col and 'message_length' in st.session_state.df.columns:
-            daily_avg_length = st.session_state.df.groupby(date_col)['message_length'].mean()
-            fig = px.line(
-                x=daily_avg_length.index,
-                y=daily_avg_length.values,
-                labels={'x': 'Date', 'y': 'Avg Message Length'},
-                title="Average Message Length Trend"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            try:
+                df_trends = st.session_state.df.copy()
+                # Convert timestamp to date for grouping
+                if df_trends[date_col].dtype == 'object':
+                    df_trends['date_only'] = pd.to_datetime(df_trends[date_col]).dt.date
+                else:
+                    df_trends['date_only'] = pd.to_datetime(df_trends[date_col]).dt.date
+                
+                daily_avg_length = df_trends.groupby('date_only')['message_length'].mean()
+                fig = px.line(
+                    x=daily_avg_length.index,
+                    y=daily_avg_length.values,
+                    labels={'x': 'Date', 'y': 'Avg Message Length'},
+                    title="Average Message Length Trend"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.info("Could not generate message length trend.")
         else:
             st.info("Date information missing for trend chart.")
     
