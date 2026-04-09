@@ -148,8 +148,8 @@ def main():
     st.title("💬 WhatsApp Chat Analyzer")
     st.markdown("**Uncover Hidden Communication Patterns with NLP**")
     
-    if st.session_state.df is None:
-        st.info("📤 Please upload a WhatsApp chat file or load sample data to get started")
+    if "df" not in st.session_state or st.session_state.df is None:
+        st.info("💡 Please upload your WhatsApp chat to get started.")
         return
     
     # Identify the correct date column dynamically to prevent KeyErrors
